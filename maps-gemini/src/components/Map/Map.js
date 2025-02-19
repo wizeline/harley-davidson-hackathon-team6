@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { GoogleMap, LoadScript, DirectionsService, DirectionsRenderer } from '@react-google-maps/api';
 import axios from 'axios';
+import Button from '../Button/Button';
 
 const containerStyle = {
     width: '100%',
@@ -78,23 +79,25 @@ export default function Map() {
     };
 
     return (
-        <div className="flex h-screen">
+        <div className="flex h-screen bg-[#202020]">
             {/* Sidebar */}
-            <div className="w-1/4 bg-gray-100 p-4">
-                <h2 className="text-lg font-semibold mb-4">Ingrese una ruta</h2>
-                <input
-                    type="text"
+            <div className="w-1/4 p-4 text-white">
+                <h2 className="text-lg font-semibold mb-4">MY AWESOME RIDE</h2>
+                <textarea
+
                     placeholder="Ej: Aguascalientes a León"
                     className="w-full p-2 border rounded mb-2"
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
+                    rows={4}
                 />
-                <button
+                {/* <button
                     className="w-full bg-blue-500 text-white py-2 rounded"
                     onClick={fetchRouteFromGemini}
                 >
                     Obtener Ruta
-                </button>
+                </button> */}
+                <Button onClick={fetchRouteFromGemini}>Create Ride from AI</Button>
             </div>
 
             {/* Mapa */}
