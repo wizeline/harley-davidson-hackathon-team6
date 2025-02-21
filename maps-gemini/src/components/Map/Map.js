@@ -125,14 +125,9 @@ export default function Map() {
       } = jsonData;
 
       setRoute({
-        origin: { lat: start.lat, lng: start.lng },
-        destination: { lat: end.lat, lng: end.lng },
+        origin: { lat: start.lat, lng: start.lng, city: start.city },
+        destination: { lat: end.lat, lng: end.lng, city: end.city },
         waypoints,
-        // waypoints:
-        //   waypoints?.map((wp) => ({
-        //     location: { lat: wp.location.lat, lng: wp.location.lng },
-        //     stopover: wp.stopover,
-        //   })) || [],
       });
 
       setDistanceKm(distance_km);
