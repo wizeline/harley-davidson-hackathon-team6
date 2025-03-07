@@ -1,12 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import {
-  GoogleMap,
-  LoadScript,
-  DirectionsService,
-  DirectionsRenderer,
-} from "@react-google-maps/api";
+import { GoogleMap, LoadScript, DirectionsRenderer } from "@react-google-maps/api";
 import axios from "axios";
 import Button from "../Button/Button";
 import SmallButton from "../Button/SmallButton";
@@ -32,6 +27,7 @@ export default function Map() {
   const [extraInfo, setExtraInfo] = useState("");
   const [weather, setWeather] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [shouldFetchDirections, setShouldFetchDirections] = useState(false);
 
   const [currentTime, setCurrentTime] = useState("");
 
@@ -60,7 +56,6 @@ export default function Map() {
     try {
       const prompt = `
         Genera un objeto JSON sin texto adicional con la siguiente estructura:
-        
         {
           "start": { "lat": number, "lng": number, "city": string, "state": string, "country": string },
           "end": { "lat": number, "lng": number, "city": string, "state": string, "country": string },
@@ -72,7 +67,6 @@ export default function Map() {
           "extraInfo": string,
           "error": null | string
         }
-        
         ### Reglas:
         - "waypoints" debe incluir puntos intermedios con lat, lng, nombre de ciudad y stopover que indica que el punto de referencia es una parada en la ruta, lo cual tiene el efecto de dividirla en dos. .
         - "distance_km" y "estimated_time_min" deben indicar la distancia y duración aproximada en minutos.
@@ -80,7 +74,6 @@ export default function Map() {
         - "weather" debe ser una cadena de texto con información sobre el clima.
         - "extraInfo" debe ser una lista con información relevante sobre el viaje en moto, precauciones y consejos.
         - Si no puedes generar el JSON correctamente, devuelve el mismo formato pero con valores nulos y un mensaje en "error".
-        
         Usa el siguiente contexto para generar los datos:
         "${inputText}"
         `.trim();
@@ -135,6 +128,7 @@ export default function Map() {
       setExtraInfo(extraInfo);
       setWeather(weather);
       setEditMode(false);
+      setShouldFetchDirections(true); // Set to true to fetch directions
     } catch (error) {
       console.error("Error consultando a Gemini:", error);
     } finally {
@@ -178,6 +172,101 @@ export default function Map() {
     link.download = "ruta.gpx";
     link.click();
   };
+
+  useEffect(() => {
+    if (shouldFetchDirections && route) {
+      fetchGoogleDirections();
+    }
+  }, [shouldFetchDirections, route]);
+
+  const fetchGoogleDirections = async () => {
+    if (!route) return;
+
+    try {
+      const response = await axios.post(
+        `https://routes.googleapis.com/directions/v2:computeRoutes?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`,
+        {
+          origin: {
+            location: { latLng: { latitude: route.origin.lat, longitude: route.origin.lng } },
+          },
+          destination: {
+            location: { latLng: { latitude: route.destination.lat, longitude: route.destination.lng } },
+          },
+          intermediates: route.waypoints?.map((wp) => ({
+            location: { latLng: { latitude: wp.location.lat, longitude: wp.location.lng } },
+          })),
+          travelMode: "DRIVE",
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
+            "X-Goog-FieldMask": "routes.legs,routes.overviewPolyline"
+          },
+        }
+      );
+
+      if (response.data.routes && response.data.routes.length > 0) {
+        const formattedDirections = {
+          routes: [
+            {
+              legs: response.data.routes[0].legs,
+              overview_polyline: { points: response.data.routes[0].overviewPolyline.polyline } 
+            },
+          ],
+        };
+        setDirections(formattedDirections);
+      }
+    } catch (error) {
+      console.error("Error obteniendo la ruta de Google Routes API:", error);
+    }
+  };
+
+  // const fetchRouteFromGoogle = async (origin, destination, waypoints) => {
+  //   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  //   const url = `https://routes.googleapis.com/directions/v2:computeRoutes?key=${apiKey}`;
+    
+  //   const requestBody = {
+  //     origin: {
+  //       location: { latLng: { latitude: origin.lat, longitude: origin.lng } },
+  //     },
+  //     destination: {
+  //       location: { latLng: { latitude: destination.lat, longitude: destination.lng } },
+  //     },
+  //     intermediates: waypoints.map((wp) => ({
+  //       location: { latLng: { latitude: wp.location.lat, longitude: wp.location.lng } },
+  //     })),
+  //     travelMode: "DRIVE",
+  //     computeAlternativeRoutes: false,
+  //     routingPreference: "TRAFFIC_UNAWARE",
+  //   };
+
+  //   try {
+  //     const response = await axios.post(url, requestBody, {
+  //       headers: {
+  //         "Content-Type": "application/json",
+  //         "X-Goog-Api-Key": apiKey,
+  //         "X-Goog-FieldMask": "routes.duration,routes.distanceMeters,routes.polyline"
+  //       },
+  //     });
+      
+  //     if (response.data.routes.length > 0) {
+  //       console.log("ROUTES",response); 
+  //       const routeData = response.data.routes[0];
+  //       setDirections(routeData);
+  //       setDistanceKm((routeData.distanceMeters / 1000).toFixed(2));
+  //       setEstimatedTimeMin(formatTime(routeData.duration.split("s")[0] / 60));
+  //     }
+  //   } catch (error) {
+  //     console.error("Error fetching route from Google Routes API:", error);
+  //   }
+  // }
+
+  // useEffect(() => {
+  //   if (route) {
+  //     fetchRouteFromGoogle(route.origin, route.destination, route.waypoints);
+  //   }
+  // }, [route]);
 
   return (
     <div className="flex h-screen bg-[#202020]">
@@ -290,6 +379,13 @@ export default function Map() {
 
       {/* Mapa */}
       <div className="w-3/4">
+        <LoadScript googleMapsApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}>
+          <GoogleMap mapContainerStyle={containerStyle} center={center} zoom={7}>
+            {directions && <DirectionsRenderer directions={directions} />}
+          </GoogleMap>
+        </LoadScript>
+      </div>
+      {/* <div className="w-3/4">
         <LoadScript
           googleMapsApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
         >
@@ -298,7 +394,7 @@ export default function Map() {
             center={center}
             zoom={7}
           >
-            {route?.origin && route?.destination && (
+            {route?.origin && route?.destination && shouldFetchDirections && (
               <DirectionsService
                 options={{
                   origin: route.origin,
@@ -308,7 +404,10 @@ export default function Map() {
                 }}
                 callback={(result, status) => {
                   if (status === "OK" && result) {
-                    setDirections(result); // ✅ Ahora sí pasamos un `DirectionsResult` válido
+                    console.log("Executing SetDirections");
+                    console.log(result);
+                    // setDirections(result); // ✅ Ahora sí pasamos un `DirectionsResult` válido
+                    setShouldFetchDirections(false); // Reset to false after fetching directions
                   } else {
                     console.error("No se pudo obtener la ruta:", status);
                   }
@@ -318,7 +417,7 @@ export default function Map() {
             {directions && <DirectionsRenderer directions={directions} />}
           </GoogleMap>
         </LoadScript>
-      </div>
+      </div> */}
     </div>
   );
 }
